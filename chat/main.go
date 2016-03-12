@@ -14,6 +14,12 @@ import (
 	"text/template"
 )
 
+var avatars Avatar = TryAvatars{
+	UseFileSystemAvatar,
+	UseAuthAvatar,
+	UseGravatar,
+}
+
 type templateHandler struct {
 	once     sync.Once
 	filename string
@@ -44,11 +50,25 @@ func main() {
 		google.New("902174392232-sanpbhvi28cs6gnejkbq7cic847tuidc.apps.googleusercontent.com", "xf334XzlOnMZSiqAbuNucGag", "http://localhost:8080/auth/callback/google"),
 	)
 
-	r := newRoom()
+	r := newRoom(avatars)
 	http.Handle("/chat", MustAuth(&templateHandler{filename: "chat.html"}))
 	http.Handle("/login", &templateHandler{filename: "login.html"})
 	http.HandleFunc("/auth/", loginHandler)
 	http.Handle("/room", r)
+	http.HandleFunc("/logout", func(w http.ResponseWriter, r *http.Request) {
+		http.SetCookie(w, &http.Cookie{
+			Name:   "auth",
+			Value:  "",
+			Path:   "/",
+			MaxAge: -1,
+		})
+		w.Header()["Location"] = []string{"/chat"}
+		w.WriteHeader(http.StatusTemporaryRedirect)
+	})
+	http.Handle("/upload", &templateHandler{filename: "upload.html"})
+	http.HandleFunc("/uploader", uploaderHandler)
+	log.Printf("http.Dir(\"./avatars\"): %s", http.Dir("./avatars"))
+	http.Handle("/avatars/", http.StripPrefix("/avatars/", http.FileServer(http.Dir("./avatars"))))
 	// チャットルームを開始します。
 	go r.run()
 	// Webサーバーを開始します。
